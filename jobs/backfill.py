@@ -182,7 +182,7 @@ def _export(tables: Dict[str, List[pd.DataFrame]], directory: str) -> None:
 
 
 def main(**kwargs) -> RunReport:
-    from core.logging_setup import configure
+    from data_pullv2.core.logging_setup import configure
     from settings import load_settings
 
     settings = load_settings()

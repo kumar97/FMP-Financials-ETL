@@ -15,7 +15,7 @@ from typing import Dict
 from sqlalchemy import Column, Index, Integer, MetaData, Table
 from sqlalchemy.engine import Engine
 
-from transform.fields import ALL_TABLES, TableSpec
+from data_pullv2.transform.fields import ALL_TABLES, TableSpec
 
 log = logging.getLogger(__name__)
 

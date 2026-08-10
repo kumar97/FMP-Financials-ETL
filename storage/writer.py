@@ -30,8 +30,8 @@ from sqlalchemy import Table
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
-from core.models import WriteResult
-from storage.schema import TABLES
+from data_pullv2.core.models import WriteResult
+from data_pullv2.storage.schema import TABLES
 
 log = logging.getLogger(__name__)
 

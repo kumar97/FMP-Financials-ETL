@@ -23,13 +23,13 @@ from typing import Dict, List, Optional, Sequence
 
 import pandas as pd
 
-from fmp import endpoints
-from fmp.client import FMPClient
-from fmp.reference import ReferenceDataProvider
-from fmp.universe import UniverseProvider
-from jobs.base import JobContext, RunReport, chunked
-from settings import Settings
-from transform.fields import SRC_EOD, STOCKS_DAILY
+from data_pullv2.fmp import endpoints
+from data_pullv2.fmp.client import FMPClient
+from data_pullv2.fmp.reference import ReferenceDataProvider
+from data_pullv2.fmp.universe import UniverseProvider
+from data_pullv2.jobs.base import JobContext, RunReport, chunked
+from data_pullv2.settings import Settings
+from data_pullv2.transform.fields import SRC_EOD, STOCKS_DAILY
 
 log = logging.getLogger(__name__)
 
@@ -156,8 +156,8 @@ async def run_eod(
 
 
 def main(**kwargs) -> RunReport:
-    from core.logging_setup import configure
-    from settings import load_settings
+    from data_pullv2.core.logging_setup import configure
+    from data_pullv2.settings import load_settings
 
     settings = load_settings()
     configure(settings.run.log_level)

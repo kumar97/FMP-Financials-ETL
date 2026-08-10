@@ -10,8 +10,8 @@ import pandas as pd
 from sqlalchemy import bindparam, create_engine, func, select, text
 from sqlalchemy.engine import Engine
 
-from settings import DatabaseSettings
-from storage.schema import TABLES, create_all
+from data_pullv2.settings import DatabaseSettings
+from data_pullv2.storage.schema import TABLES, create_all
 
 log = logging.getLogger(__name__)
 
