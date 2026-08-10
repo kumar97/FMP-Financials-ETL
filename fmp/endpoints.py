@@ -46,6 +46,13 @@ class EndpointSpec:
 KEY_METRICS = EndpointSpec("key-metrics", "key-metrics", Cardinality.PER_SYMBOL)
 RATIOS = EndpointSpec("ratios", "ratios", Cardinality.PER_SYMBOL)
 FINANCIAL_GROWTH = EndpointSpec("financial-growth", "financial-growth", Cardinality.PER_SYMBOL)
+BALANCE_SHEET = EndpointSpec(
+    "balance-sheet-statement",
+    "balance-sheet-statement",
+    Cardinality.PER_SYMBOL,
+    notes="Only for the derived liquidity_ratios.cash_ratio. Returns the same "
+          "5 annual periods, on the same dates, as ratios and key-metrics.",
+)
 
 # income-statement-growth is deliberately absent. Its only consumed field,
 # growthEBITDA, is bit-identical to financial-growth.ebitdaGrowth (verified
@@ -94,6 +101,7 @@ BACKFILL_PER_SYMBOL = (
     KEY_METRICS,
     RATIOS,
     FINANCIAL_GROWTH,
+    BALANCE_SHEET,
     EOD_FULL,
     HISTORICAL_MARKET_CAP,
 )
@@ -107,6 +115,7 @@ REGISTRY: Dict[str, EndpointSpec] = {
         KEY_METRICS,
         RATIOS,
         FINANCIAL_GROWTH,
+        BALANCE_SHEET,
         EOD_FULL,
         HISTORICAL_MARKET_CAP,
         MARKET_CAP_BATCH,

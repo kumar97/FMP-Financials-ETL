@@ -5,8 +5,8 @@ Call cost per symbol, before and after:
     before   key-metrics, ratios, financial-growth, income-statement-growth,
              historical-price-eod, historical-market-capitalization,
              profile, shares-float                              = 8 requests
-    after    key-metrics, ratios, financial-growth,
-             historical-price-eod, historical-market-capitalization = 5 requests
+    after    key-metrics, ratios, financial-growth, balance-sheet-statement,
+             historical-price-eod, historical-market-capitalization = 6 requests
              + O(1) shared: 1 screener call, ~8 shares-float pages
 
 income-statement-growth is dropped (its only used field duplicates
@@ -26,15 +26,16 @@ from typing import Dict, List, Optional, Sequence
 
 import pandas as pd
 
-from fmp import endpoints
-from fmp.client import FMPClient
-from fmp.reference import ReferenceDataProvider
-from fmp.universe import UniverseProvider
-from jobs.base import JobContext, RunReport, chunked
-from settings import Settings
-from transform.fields import (
+from data_pullv2.fmp import endpoints
+from data_pullv2.fmp.client import FMPClient
+from data_pullv2.fmp.reference import ReferenceDataProvider
+from data_pullv2.fmp.universe import UniverseProvider
+from data_pullv2.jobs.base import JobContext, RunReport, chunked
+from data_pullv2.settings import Settings
+from data_pullv2.transform.fields import (
     ALL_TABLES,
     FUNDAMENTAL_TABLES,
+    SRC_BALANCE_SHEET,
     SRC_EOD,
     SRC_FIN_GROWTH,
     SRC_KEY_METRICS,
@@ -52,6 +53,7 @@ _SOURCE_FOR_ENDPOINT = {
     endpoints.KEY_METRICS.name: SRC_KEY_METRICS,
     endpoints.RATIOS.name: SRC_RATIOS,
     endpoints.FINANCIAL_GROWTH.name: SRC_FIN_GROWTH,
+    endpoints.BALANCE_SHEET.name: SRC_BALANCE_SHEET,
     endpoints.EOD_FULL.name: SRC_EOD,
     endpoints.HISTORICAL_MARKET_CAP.name: SRC_MARKET_CAP,
 }

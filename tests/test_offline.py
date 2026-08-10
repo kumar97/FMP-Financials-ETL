@@ -13,12 +13,21 @@ import time
 
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# The package is imported as ``data_pullv2.*``, so its *parent* is what has to
+# be importable -- two levels up from this file, not one.
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
 
 from data_pullv2.core.ratelimit import AsyncRateLimiter
 from data_pullv2.storage.schema import TABLES
 from data_pullv2.storage.writer import PG_MAX_BIND_PARAMS, TableWriter, rows_per_statement
-from data_pullv2.transform.fields import ALL_TABLES, STOCKS_DAILY
+from data_pullv2.transform.fields import (
+    ALL_TABLES,
+    LIQUIDITY_RATIOS,
+    SRC_BALANCE_SHEET,
+    STOCKS_DAILY,
+    api_fields_needed,
+)
 from data_pullv2.transform.processor import Processor
 
 
@@ -189,6 +198,55 @@ def test_processor_broadcasts_symbol_level_reference_data():
     assert len(out) == 2
     assert set(out["sector"]) == {"Technology"}
     assert set(out["exchange"]) == {"NASDAQ"}
+
+
+# --- derived fields ---------------------------------------------------------
+
+def _balance_sheet(**overrides):
+    row = {
+        "symbol": "AAPL",
+        "date": "2025-09-27",
+        # AAPL FY2025, as returned by the live endpoint.
+        "cashAndCashEquivalents": 35_934_000_000,
+        "totalCurrentLiabilities": 165_631_000_000,
+    }
+    row.update(overrides)
+    return [row]
+
+
+def test_api_fields_needed_reports_derived_inputs():
+    """A derived column must declare its inputs, not a single api_field."""
+    assert api_fields_needed(SRC_BALANCE_SHEET) == [
+        "cashAndCashEquivalents", "totalCurrentLiabilities",
+    ]
+
+
+def test_cash_ratio_is_computed_and_merged_onto_the_ratio_rows():
+    out = Processor().build_fundamentals(LIQUIDITY_RATIOS, {
+        "key-metrics": [{"symbol": "AAPL", "date": "2025-09-27", "currentRatio": 0.87}],
+        SRC_BALANCE_SHEET: _balance_sheet(),
+    })
+    assert len(out) == 1
+    expected = 35_934_000_000 / 165_631_000_000
+    assert abs(out["cash_ratio"].iloc[0] - expected) < 1e-12
+    # Same date as the other liquidity sources, so it merges rather than
+    # doubling the row count.
+    assert out["current_ratio"].iloc[0] == 0.87
+
+
+def test_cash_ratio_is_null_when_the_denominator_is_zero():
+    """Division must yield NULL, not inf, or the column is unusable."""
+    out = Processor().build_fundamentals(LIQUIDITY_RATIOS, {
+        SRC_BALANCE_SHEET: _balance_sheet(totalCurrentLiabilities=0),
+    })
+    assert pd.isna(out["cash_ratio"].iloc[0])
+
+
+def test_cash_ratio_survives_a_payload_missing_its_inputs():
+    out = Processor().build_fundamentals(LIQUIDITY_RATIOS, {
+        SRC_BALANCE_SHEET: [{"symbol": "AAPL", "date": "2025-09-27"}],
+    })
+    assert pd.isna(out["cash_ratio"].iloc[0])
 
 
 def _run_all():

@@ -17,11 +17,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 from typing import List, Optional
 
-from core.logging_setup import configure
-from settings import ConfigError, load_settings
+# Run as a script (``python cli.py``, ``python eod_update.py``) the working
+# directory is this package, not its parent, so the ``data_pullv2.*`` imports
+# the modules use would not resolve. Put the parent on the path first.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from data_pullv2.core.logging_setup import configure
+from data_pullv2.settings import ConfigError, load_settings
 
 log = logging.getLogger("cli")
 
@@ -62,8 +68,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_status(settings) -> int:
-    from storage.repo import Repository, make_engine
-    from transform.fields import ALL_TABLES
+    from data_pullv2.storage.repo import Repository, make_engine
+    from data_pullv2.transform.fields import ALL_TABLES
 
     repo = Repository(make_engine(settings.db))
     try:
@@ -84,7 +90,7 @@ def cmd_status(settings) -> int:
 
 def cmd_plan(settings, limit: Optional[int]) -> int:
     """Estimate request counts for both jobs. Makes no API calls."""
-    from fmp import endpoints
+    from data_pullv2.fmp import endpoints
 
     n = limit or settings.run.max_symbols
     per_symbol_backfill = len(endpoints.BACKFILL_PER_SYMBOL)
@@ -110,7 +116,7 @@ def cmd_plan(settings, limit: Optional[int]) -> int:
 
 
 def cmd_cache(settings, clear: bool) -> int:
-    from core.cache import JsonCache
+    from data_pullv2.core.cache import JsonCache
 
     cache = JsonCache(settings.run.cache_dir, settings.run.cache_ttl_hours,
                       settings.run.cache_enabled)
@@ -151,14 +157,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return cmd_cache(settings, args.clear)
 
     if args.command == "eod":
-        from jobs.eod import run_eod
+        from data_pullv2.jobs.eod import run_eod
 
         report = asyncio.run(run_eod(
             settings, symbols=_symbols(args.symbols), limit=args.limit,
             dry_run=args.dry_run, force=args.force,
         ))
     elif args.command == "backfill":
-        from jobs.backfill import run_backfill
+        from data_pullv2.jobs.backfill import run_backfill
 
         report = asyncio.run(run_backfill(
             settings, symbols=_symbols(args.symbols), limit=args.limit,

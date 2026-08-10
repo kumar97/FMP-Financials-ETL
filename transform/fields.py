@@ -25,21 +25,26 @@ this refactor does not change what lands in your tables.
   ebit_growth            <- financial-growth.ebitgrowth      (was 'ebitGrowth')
   eps_growth             <- financial-growth.epsgrowth       (was 'epsGrowth')
   shares_outstanding     <- shares-float-all.outstandingShares (fetched, never merged)
-  cash_ratio             -- no equivalent field exists on this plan
   price_earnings_ratio   -- duplicate of price_to_earnings_ratio
   change_pct             -- duplicate of change_percent
 
 Flip ``ENABLE_CORRECTED_FIELDS`` to True (or set CORRECTED_FIELDS=1 in .env)
 to populate the four that are recoverable. No DDL change is required for any
 of them -- the columns already exist.
+
+``cash_ratio`` used to be on that list. There is no cashRatio field on this
+plan, but the inputs are on ``balance-sheet-statement``, so it is now a
+DERIVED field: one column computed from several fields of one endpoint (see
+``FieldSpec.compute``) rather than copied from one.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+import pandas as pd
 from sqlalchemy import BigInteger, DateTime, Float, String
 from sqlalchemy.types import TypeEngine
 
@@ -55,6 +60,7 @@ SRC_EOD = "historical-price-eod"
 SRC_MARKET_CAP = "market-cap"
 SRC_PROFILE = "profile"
 SRC_SHARES = "shares-float"
+SRC_BALANCE_SHEET = "balance-sheet-statement"
 
 
 @dataclass(frozen=True)
@@ -69,6 +75,17 @@ class FieldSpec:
     #  True  -> only enabled when ENABLE_CORRECTED_FIELDS is set.
     corrected: bool = False
     note: str = ""
+    # Derived column: ``compute`` receives one numeric Series per name in
+    # ``inputs``, in order, and returns the column. Set instead of api_field.
+    inputs: Tuple[str, ...] = ()
+    compute: Optional[Callable[..., pd.Series]] = None
+
+    @property
+    def api_fields(self) -> Tuple[str, ...]:
+        """Every field this column needs from its endpoint."""
+        if self.compute is not None:
+            return self.inputs
+        return (self.api_field,) if self.api_field else ()
 
     @property
     def active(self) -> bool:
@@ -88,7 +105,7 @@ class TableSpec:
         return [f.db_column for f in self.fields]
 
     def active_fields(self) -> List[FieldSpec]:
-        return [f for f in self.fields if f.active and f.api_field]
+        return [f for f in self.fields if f.active and f.api_fields]
 
     def fields_for(self, source: str) -> List[FieldSpec]:
         return [f for f in self.active_fields() if f.source == source]
@@ -99,6 +116,19 @@ class TableSpec:
             if f.source and f.source not in seen:
                 seen.append(f.source)
         return seen
+
+
+def cash_ratio(
+    cash_and_cash_equivalents: pd.Series,
+    total_current_liabilities: pd.Series,
+) -> pd.Series:
+    """cashAndCashEquivalents / totalCurrentLiabilities.
+
+    A zero denominator yields NaN rather than inf, so the column lands as NULL.
+    """
+    return cash_and_cash_equivalents / total_current_liabilities.where(
+        total_current_liabilities != 0
+    )
 
 
 _SYMBOL = FieldSpec("symbol", String(10), None, None, note="join key")
@@ -112,8 +142,10 @@ LIQUIDITY_RATIOS = TableSpec(
         _SYMBOL,
         _DATE,
         FieldSpec("current_ratio", Float, SRC_KEY_METRICS, "currentRatio"),
-        FieldSpec("cash_ratio", Float, None, None, enabled=False,
-                  note="no cashRatio field on this plan; 129/129 NULL in DB"),
+        FieldSpec("cash_ratio", Float, SRC_BALANCE_SHEET, None,
+                  inputs=("cashAndCashEquivalents", "totalCurrentLiabilities"),
+                  compute=cash_ratio,
+                  note="derived: no cashRatio field on this plan"),
         FieldSpec("days_of_sales_outstanding", Float, SRC_KEY_METRICS, "daysOfSalesOutstanding"),
         FieldSpec("operating_cash_flow_ratio", Float, SRC_RATIOS, "operatingCashFlowRatio"),
         FieldSpec("debt_to_assets_ratio", Float, SRC_RATIOS, "debtToAssetsRatio"),
@@ -221,6 +253,7 @@ def api_fields_needed(source: str) -> List[str]:
     needed: List[str] = []
     for table in ALL_TABLES:
         for spec in table.fields_for(source):
-            if spec.api_field and spec.api_field not in needed:
-                needed.append(spec.api_field)
+            for api_field in spec.api_fields:
+                if api_field not in needed:
+                    needed.append(api_field)
     return needed

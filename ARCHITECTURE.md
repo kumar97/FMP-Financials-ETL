@@ -48,7 +48,20 @@ FieldSpec("revenue_growth", Float, SRC_FIN_GROWTH, "revenueGrowth", scale=100.0)
 ```
 
 `storage/schema.py` generates the DDL from it, `transform/processor.py` generates
-the transforms from it. Previously this mapping lived in three places — the
+the transforms from it.
+
+A column that has no single API field behind it declares `inputs` and a
+`compute` function instead of an `api_field`, and stays in the same one map:
+
+```python
+FieldSpec("cash_ratio", Float, SRC_BALANCE_SHEET, None,
+          inputs=("cashAndCashEquivalents", "totalCurrentLiabilities"),
+          compute=cash_ratio)
+```
+
+`compute` receives one numeric Series per name in `inputs`, in order.
+
+Previously this mapping lived in three places — the
 `TABLE_SCHEMAS` dict, hardcoded column lists in `processor.py`, and a camelCase
 regex in `_normalize_column_names` — and nothing raised when they drifted:
 `filter_columns` silently dropped unknown API fields and the column just stayed
@@ -63,10 +76,10 @@ irreducible, not an oversight.
 
 | | before | after |
 |---|---|---|
-| **backfill** (per symbol) | 8 | 5 |
+| **backfill** (per symbol) | 8 | 6 |
 | **EOD** (per symbol) | 4 | 1 |
 | **EOD**, 250 symbols | 1,000 | ~252 |
-| **backfill**, 250 symbols | 2,000 | ~1,259 |
+| **backfill**, 250 symbols | 2,000 | ~1,509 |
 
 What changed:
 
@@ -81,6 +94,10 @@ What changed:
 - per-symbol `historical-market-capitalization` → **`market-capitalization-batch`**
   for the daily job (~500 symbols/request). Backfill still uses the per-symbol
   historical series, because the batch endpoint returns only the latest value.
+- `balance-sheet-statement` **added** to the backfill (+1 per symbol), solely to
+  derive `liquidity_ratios.cash_ratio`. It returns the same 5 annual periods on
+  the same dates as `ratios`/`key-metrics`, so it merges without inflating the
+  row count. The EOD job does not touch fundamentals and is unaffected.
 
 ## Correctness fixes
 
@@ -130,13 +147,26 @@ field names that don't exist. Correct names are recorded in `fields.py` but
 | `ebit_growth` | recoverable → `financial-growth.ebitgrowth` (lowercase g) |
 | `eps_growth` | recoverable → `financial-growth.epsgrowth` (lowercase g) |
 | `shares_outstanding` | recoverable → `shares-float-all.outstandingShares` |
-| `cash_ratio` | no equivalent field on this plan |
 | `price_earnings_ratio` | duplicate of `price_to_earnings_ratio` |
 | `change_pct` | duplicate of `change_percent` |
 
 Set `CORRECTED_FIELDS=1` to populate the four recoverable ones. **No DDL change
 is needed** — those columns already exist. Backfill the history afterwards to
 fill older rows.
+
+`cash_ratio` used to be on that list. There is still no `cashRatio` field on
+this plan, but the inputs are on `balance-sheet-statement`, so it is now
+computed (see below) and populates on every backfill — no flag required. It
+stays NULL for existing rows until you re-run the backfill.
+
+## Derived column: `cash_ratio`
+
+```
+cashAndCashEquivalents / totalCurrentLiabilities
+```
+
+Both from `balance-sheet-statement`. A zero denominator yields NULL rather than
+infinity. The formula lives in `cash_ratio()` in `transform/fields.py`.
 
 ## Usage
 

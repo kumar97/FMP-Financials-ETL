@@ -12,11 +12,12 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import pandas as pd
 
-from fields import (
+from data_pullv2.transform.fields import (
     SRC_EOD,
     SRC_MARKET_CAP,
     SRC_PROFILE,
     SRC_SHARES,
+    FieldSpec,
     TableSpec,
 )
 
@@ -36,6 +37,26 @@ def _frame(payload: Optional[Any]) -> pd.DataFrame:
     except Exception as exc:  # malformed payload must not kill the run
         log.warning("could not build DataFrame from payload: %s", exc)
         return pd.DataFrame()
+
+
+def _series_for(spec: FieldSpec, df: pd.DataFrame) -> Optional[pd.Series]:
+    """One column's values, or None when the response cannot supply them."""
+    missing = [f for f in spec.api_fields if f not in df.columns]
+    if missing:
+        log.debug("%s: %s absent from payload", spec.db_column, ", ".join(missing))
+        return None
+
+    if spec.compute is not None:
+        # Derived columns always work on numbers; a non-numeric input coerces
+        # to NaN and propagates, so the column lands as NULL rather than error.
+        series = spec.compute(
+            *(pd.to_numeric(df[f], errors="coerce") for f in spec.api_fields)
+        )
+    elif spec.scale != 1.0:
+        series = pd.to_numeric(df[spec.api_field], errors="coerce")
+    else:
+        return df[spec.api_field]
+    return series * spec.scale if spec.scale != 1.0 else series
 
 
 def _extract(
@@ -60,14 +81,10 @@ def _extract(
         out["date"] = pd.to_datetime(df["date"], errors="coerce", format="mixed")
 
     for spec in specs:
-        if spec.api_field in df.columns:
-            series = pd.to_numeric(df[spec.api_field], errors="coerce") \
-                if spec.scale != 1.0 else df[spec.api_field]
-            out[spec.db_column] = series * spec.scale if spec.scale != 1.0 else series
-        else:
-            # Declared but absent from this response: emit the column as NULL
-            # so every chunk has a stable shape.
-            out[spec.db_column] = pd.NA
+        series = _series_for(spec, df)
+        # Declared but absent from this response: emit the column as NULL so
+        # every chunk has a stable shape.
+        out[spec.db_column] = pd.NA if series is None else series
     return out
 
 
@@ -114,7 +131,7 @@ class Processor:
         ``profile``/``market_cap``/``shares_outstanding`` come from the batch
         and universe endpoints rather than per-symbol requests.
         """
-        from fields import STOCKS_DAILY as table
+        from data_pullv2.transform.fields import STOCKS_DAILY as table
 
         eod = _extract(payloads.get(SRC_EOD), table, SRC_EOD)
         if eod.empty or "date" not in eod.columns:
