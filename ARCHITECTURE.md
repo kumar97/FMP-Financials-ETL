@@ -102,10 +102,10 @@ What changed:
 ## Correctness fixes
 
 **Bind-parameter overflow.** The old `_upsert_data` built one INSERT for every
-row. PostgreSQL caps a statement at 65,535 bind parameters; stocks_daily has 16
-columns, so ~4,095 rows. Two tickers of history already produce 35,112
-parameters and 250 tickers produce ~4.4M — unsendable. `storage/writer.py`
-derives a chunk size from the column count and commits in batches.
+row. PostgreSQL caps a statement at 65,535 bind parameters; at stocks_daily's
+15 columns that is ~4,369 rows. Two tickers of history already exceed it and
+250 tickers produce ~4.7M parameters — unsendable. `storage/writer.py` derives
+a chunk size from the column count and commits in batches.
 
 **Duplicate conflict keys.** PostgreSQL rejects `ON CONFLICT DO UPDATE` when one
 statement carries the same key twice. Rows are deduped on `(symbol, date)`,
@@ -147,17 +147,25 @@ field names that don't exist. Correct names are recorded in `fields.py` but
 | `ebit_growth` | recoverable → `financial-growth.ebitgrowth` (lowercase g) |
 | `eps_growth` | recoverable → `financial-growth.epsgrowth` (lowercase g) |
 | `shares_outstanding` | recoverable → `shares-float-all.outstandingShares` |
-| `price_earnings_ratio` | duplicate of `price_to_earnings_ratio` |
-| `change_pct` | duplicate of `change_percent` |
 
-Set `CORRECTED_FIELDS=1` to populate the four recoverable ones. **No DDL change
-is needed** — those columns already exist. Backfill the history afterwards to
-fill older rows.
+Set `CORRECTED_FIELDS=1` to populate them. **No DDL change is needed** — those
+columns already exist. Backfill the history afterwards to fill older rows.
 
-`cash_ratio` used to be on that list. There is still no `cashRatio` field on
-this plan, but the inputs are on `balance-sheet-statement`, so it is now
-computed (see below) and populates on every backfill — no flag required. It
-stays NULL for existing rows until you re-run the backfill.
+Three columns have since left that list:
+
+- `cash_ratio` — there is still no `cashRatio` field on this plan, but the
+  inputs are on `balance-sheet-statement`, so it is now computed (see below)
+  and populates on every backfill, no flag required.
+- `price_earnings_ratio` — **dropped**. Named after FMP's v3 field
+  `priceEarningsRatio`, which the stable `/ratios` endpoint does not return, so
+  it could never be anything but NULL. `price_to_earnings_ratio` holds the value.
+- `change_pct` — **dropped**. Dead duplicate of `change_percent`.
+
+The two drops are the only deliberate divergence from the legacy schema. They
+were carried while the original tables were live so that `create_all` could not
+alter them; those tables have since been dropped and rebuilt from `fields.py`.
+`test_no_column_is_declared_without_a_source` now fails the build if a column
+is declared with nothing behind it.
 
 ## Derived column: `cash_ratio`
 

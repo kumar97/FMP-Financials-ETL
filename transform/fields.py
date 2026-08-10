@@ -25,17 +25,27 @@ this refactor does not change what lands in your tables.
   ebit_growth            <- financial-growth.ebitgrowth      (was 'ebitGrowth')
   eps_growth             <- financial-growth.epsgrowth       (was 'epsGrowth')
   shares_outstanding     <- shares-float-all.outstandingShares (fetched, never merged)
-  price_earnings_ratio   -- duplicate of price_to_earnings_ratio
-  change_pct             -- duplicate of change_percent
 
 Flip ``ENABLE_CORRECTED_FIELDS`` to True (or set CORRECTED_FIELDS=1 in .env)
 to populate the four that are recoverable. No DDL change is required for any
 of them -- the columns already exist.
 
-``cash_ratio`` used to be on that list. There is no cashRatio field on this
-plan, but the inputs are on ``balance-sheet-statement``, so it is now a
-DERIVED field: one column computed from several fields of one endpoint (see
-``FieldSpec.compute``) rather than copied from one.
+Three columns have since left that list:
+
+  cash_ratio            -- no cashRatio field exists on this plan, but its
+                           inputs are on ``balance-sheet-statement``, so it is
+                           now a DERIVED field: one column computed from
+                           several fields of one endpoint (``FieldSpec.compute``)
+                           rather than copied from one.
+  price_earnings_ratio  -- DROPPED. A dead duplicate of price_to_earnings_ratio,
+                           named after FMP's v3 field ``priceEarningsRatio``,
+                           which the stable /ratios endpoint does not return.
+  change_pct            -- DROPPED. A dead duplicate of change_percent.
+
+The two drops are the only place where this schema deliberately diverges from
+the legacy one. They were kept while the original tables were live, so that
+``create_all`` could not alter them; those tables have since been dropped and
+rebuilt from this file, so the compatibility constraint is gone.
 """
 
 from __future__ import annotations
@@ -162,8 +172,6 @@ EARNINGS_RATIOS = TableSpec(
     (
         _SYMBOL,
         _DATE,
-        FieldSpec("price_earnings_ratio", Float, None, None, enabled=False,
-                  note="duplicate of price_to_earnings_ratio; 129/129 NULL in DB"),
         FieldSpec("price_to_earnings_ratio", Float, SRC_RATIOS, "priceToEarningsRatio"),
         FieldSpec("price_to_sales_ratio", Float, SRC_RATIOS, "priceToSalesRatio"),
         FieldSpec("enterprise_value_multiple", Float, SRC_RATIOS, "enterpriseValueMultiple"),
@@ -224,8 +232,6 @@ STOCKS_DAILY = TableSpec(
         # share count above 2.1e9 overflows PostgreSQL int4. Widening is
         # forward-compatible -- existing int4 columns accept these values.
         FieldSpec("volume", BigInteger, SRC_EOD, "volume"),
-        FieldSpec("change_pct", Float, None, None, enabled=False,
-                  note="duplicate of change_percent; never populated"),
         FieldSpec("vwap", Float, SRC_EOD, "vwap"),
         FieldSpec("market_cap", Float, SRC_MARKET_CAP, "marketCap"),
         FieldSpec("shares_outstanding", BigInteger, SRC_SHARES, "outstandingShares",

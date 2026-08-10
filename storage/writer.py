@@ -4,10 +4,10 @@ The previous ``_upsert_data`` built a single INSERT containing every row:
 
     stmt = insert(table).values(records)     # all rows, one statement
 
-PostgreSQL's wire protocol caps a statement at 65,535 bind parameters. With
-16 columns that is ~4,095 rows. Measured against the live API, two tickers of
-EOD history already produce 35,112 parameters; 250 tickers produce ~4.4M and
-5,939 produce ~104M. The statement cannot be sent at all.
+PostgreSQL's wire protocol caps a statement at 65,535 bind parameters. At
+stocks_daily's 15 columns that is ~4,369 rows. Measured against the live API,
+two tickers of EOD history already produce ~37,600 parameters; 250 tickers
+produce ~4.7M and 5,939 produce ~112M. The statement cannot be sent at all.
 
 Two further failure modes are handled here:
 

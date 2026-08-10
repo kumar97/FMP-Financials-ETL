@@ -43,8 +43,8 @@ def test_rows_per_statement_respects_bind_limit():
 def test_chunking_prevents_the_original_overflow():
     """The old code sent one statement for every row.
 
-    stocks_daily has 16 columns; 3,762 rows (3 tickers of history) is 60,192
-    bind parameters, and 250 tickers is ~4.4M -- both unsendable as one
+    stocks_daily has 15 columns; 3,762 rows (3 tickers of history) is 56,430
+    bind parameters, and 250 tickers is ~4.7M -- both unsendable as one
     statement.
     """
     columns = len(STOCKS_DAILY.all_columns())
@@ -110,15 +110,23 @@ def test_prepare_drops_rows_missing_conflict_key():
 
 # --- schema parity ----------------------------------------------------------
 
-def test_schema_matches_legacy_column_names():
-    """The generated DDL must stay column-for-column identical to the live DB."""
-    legacy = {
+def test_schema_column_names_are_pinned():
+    """The generated DDL is pinned, so a field-map edit cannot silently
+    reshape a table.
+
+    This started as a parity check against the legacy schema. It now differs
+    from it by exactly two deliberate omissions -- ``price_earnings_ratio``
+    and ``change_pct``, dead duplicates of ``price_to_earnings_ratio`` and
+    ``change_percent`` that could never be populated. They were carried while
+    the original tables were live; those have since been dropped and rebuilt.
+    """
+    expected = {
         "liquidity_ratios": ["symbol", "date", "current_ratio", "cash_ratio",
                              "days_of_sales_outstanding", "operating_cash_flow_ratio",
                              "debt_to_assets_ratio", "debt_to_equity_ratio",
                              "interest_coverage", "debt_service_coverage_ratio",
                              "created_at"],
-        "earnings_ratios": ["symbol", "date", "price_earnings_ratio",
+        "earnings_ratios": ["symbol", "date",
                             "price_to_earnings_ratio", "price_to_sales_ratio",
                             "enterprise_value_multiple", "ev_to_sales", "created_at"],
         "financial_growth": ["symbol", "date", "revenue_growth", "ebit_growth",
@@ -130,11 +138,25 @@ def test_schema_matches_legacy_column_names():
                            "net_profit_margin", "created_at"],
         "stocks_daily": ["symbol", "adj_open", "adj_close", "high", "low",
                          "change_percent", "date", "exchange", "sector", "industry",
-                         "volume", "change_pct", "vwap", "market_cap",
+                         "volume", "vwap", "market_cap",
                          "shares_outstanding", "created_at"],
     }
     for spec in ALL_TABLES:
-        assert spec.all_columns() == legacy[spec.name], spec.name
+        assert spec.all_columns() == expected[spec.name], spec.name
+
+
+def test_no_column_is_declared_without_a_source():
+    """Every column must be populated by something.
+
+    ``price_earnings_ratio`` and ``change_pct`` were exactly this: declared in
+    the DDL with nothing behind them, so they read as data that was missing
+    rather than data that was never collected.
+    """
+    for spec in ALL_TABLES:
+        for f in spec.fields:
+            if f.db_column in ("symbol", "date", "created_at"):
+                continue  # keys and the ingest stamp are set by the writer
+            assert f.api_fields, f"{spec.name}.{f.db_column} has no source"
 
 
 # --- rate limiter -----------------------------------------------------------
