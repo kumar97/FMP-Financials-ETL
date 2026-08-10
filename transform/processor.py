@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import pandas as pd
 
-from transform.fields import (
+from fields import (
     SRC_EOD,
     SRC_MARKET_CAP,
     SRC_PROFILE,
@@ -114,7 +114,7 @@ class Processor:
         ``profile``/``market_cap``/``shares_outstanding`` come from the batch
         and universe endpoints rather than per-symbol requests.
         """
-        from transform.fields import STOCKS_DAILY as table
+        from fields import STOCKS_DAILY as table
 
         eod = _extract(payloads.get(SRC_EOD), table, SRC_EOD)
         if eod.empty or "date" not in eod.columns:
