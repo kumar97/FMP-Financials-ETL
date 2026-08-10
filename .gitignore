@@ -1,0 +1,106 @@
+# ---------------------------------------------------------------------------
+# Secrets -- never commit these
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# ---------------------------------------------------------------------------
+# Claude Code
+# ---------------------------------------------------------------------------
+.claude/
+CLAUDE.local.md
+
+# ---------------------------------------------------------------------------
+# Pipeline runtime artifacts
+# ---------------------------------------------------------------------------
+.cache/
+*.log
+logs/
+out/
+exports/
+
+# Sample/scratch data pulled from the API. Remove these two lines if you want
+# them tracked -- note test_eod.csv is ~3 MB.
+test_eod.csv
+test_earnings.csv
+
+# Generated table dumps from `cli.py backfill --export-dir`
+liquidity_ratios.csv
+earnings_ratios.csv
+financial_growth.csv
+profit_margins.csv
+stocks_daily.csv
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checkers / linters
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# Editors
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ---------------------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

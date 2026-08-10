@@ -1,0 +1,29 @@
+# Normalize to LF in the repository; Git checks out native line endings.
+# Without this, Windows checkouts produce whole-file diffs on every edit.
+* text=auto eol=lf
+
+*.py     text eol=lf diff=python
+*.md     text eol=lf
+*.txt    text eol=lf
+*.json   text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.sql    text eol=lf
+*.cfg    text eol=lf
+*.toml   text eol=lf
+.env.example text eol=lf
+
+# Batch files must keep CRLF or cmd.exe can misparse them.
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Binary -- never munge, never diff.
+*.png    binary
+*.jpg    binary
+*.gz     binary
+*.zip    binary
+*.parquet binary
+*.pyc    binary
+
+# Large data dumps: suppress diffs in review.
+*.csv    text eol=lf -diff
