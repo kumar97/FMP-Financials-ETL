@@ -4,9 +4,23 @@ FMP → PostgreSQL ingestion for equity fundamentals and daily prices.
 
 ## Layout
 
+The package is nested one level below the repository root, so the import name
+`data_pullv2` is a directory *inside* the repo rather than the repo itself.
+That keeps imports working whatever the clone is named. There is no install
+step: running from the repository root is what puts the package on
+`sys.path`.
+
 ```
+requirements.txt
+.env              gitignored; resolved from the repo root (see settings.py)
+.github/workflows/eod.yml   scheduled run; needs a non-local database
+tests/            no network, no database
+
+data_pullv2/      the package -- this name is what imports bind to
 cli.py            single entrypoint: eod | backfill | status | plan | cache
 settings.py       validated config; every tuneable lives here
+app.py            thin wrapper -> backfill
+eod_update.py     thin wrapper -> eod (Task Scheduler entry)
 
 core/             infrastructure, no domain knowledge
   models.py         FetchResult, FetchStats, WriteResult
@@ -33,8 +47,6 @@ jobs/             orchestration
   base.py           JobContext, RunReport, chunking
   backfill.py       full history
   eod.py            daily incremental
-
-tests/test_offline.py   no network, no database
 ```
 
 Dependencies point one way: `jobs → {fmp, transform, storage} → core`.
@@ -178,20 +190,25 @@ infinity. The formula lives in `cash_ratio()` in `transform/fields.py`.
 
 ## Usage
 
+Run as a module from the repository root:
+
 ```bash
-python cli.py plan --limit 250          # request estimate, makes no API calls
-python cli.py eod                       # daily incremental
-python cli.py eod --dry-run --force     # preview, writes nothing
-python cli.py backfill --limit 50
-python cli.py backfill --export-dir out/
-python cli.py status                    # row counts per table
-python cli.py cache --clear
+python -m data_pullv2.cli plan --limit 250   # request estimate, no API calls
+python -m data_pullv2.cli eod                # daily incremental
+python -m data_pullv2.cli eod --dry-run --force   # preview, writes nothing
+python -m data_pullv2.cli backfill --limit 50
+python -m data_pullv2.cli backfill --export-dir out/
+python -m data_pullv2.cli status             # row counts per table
+python -m data_pullv2.cli cache --clear
 python tests/test_offline.py
 ```
 
-`app.py` and `eod_update.py` remain as thin wrappers so the existing Task
-Scheduler entry keeps working. Both exit non-zero when >50% of symbols fail, so
-a half-broken run is distinguishable from a clean one.
+`app.py` and `eod_update.py` remain as thin wrappers so the Task Scheduler
+entry keeps working — its arguments become `-m data_pullv2.eod_update`, with
+`Start in` set to the repository root. Both forward extra arguments, so
+`--dry-run` and `--help` behave as expected instead of silently launching a
+production run. Both exit non-zero when >50% of symbols fail, so a half-broken
+run is distinguishable from a clean one.
 
 ## Configuration (`.env`)
 
@@ -209,14 +226,11 @@ a half-broken run is distinguishable from a clean one.
 | `CACHE_TTL_HOURS` | 24 | reference-data cache lifetime |
 | `CACHE_ENABLED` | true | |
 | `CORRECTED_FIELDS` | false | populate the recoverable NULL columns |
+| `ENV_FILE` | — | explicit path to `.env`, overriding the search |
 | `LOG_LEVEL` | INFO | |
 
 ## Superseded files
 
-Left on disk (this directory is not under version control, so nothing was
-deleted) and no longer imported by any entrypoint. Safe to remove once you're
-satisfied: `client.py`, `pipeline.py`, `processor.py`, `db_manager.py`,
-`models.py`, `config.py`.
-
-`config.py` is still imported by the old `db_manager.py` only. Nothing in the
-new package reads it.
+The original implementation — `client.py`, `pipeline.py`, `processor.py`,
+`db_manager.py`, `models.py` and `config.py` — has been deleted. It remains in
+git history up to the restructure commit if you need to refer back to it.

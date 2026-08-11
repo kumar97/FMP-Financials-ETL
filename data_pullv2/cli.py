@@ -1,12 +1,14 @@
 """Single entrypoint for every job.
 
-    python cli.py eod                       # daily incremental update
-    python cli.py eod --dry-run             # fetch + transform, write nothing
-    python cli.py backfill --limit 50       # full history for 50 symbols
-    python cli.py backfill --symbols AAPL,MSFT
-    python cli.py status                    # row counts per table
-    python cli.py plan --limit 250          # request-count estimate, no calls
-    python cli.py cache --clear
+Run from the repository root, which is what puts the package on sys.path:
+
+    python -m data_pullv2.cli eod              # daily incremental update
+    python -m data_pullv2.cli eod --dry-run    # fetch + transform, no writes
+    python -m data_pullv2.cli backfill --limit 50
+    python -m data_pullv2.cli backfill --symbols AAPL,MSFT
+    python -m data_pullv2.cli status           # row counts per table
+    python -m data_pullv2.cli plan --limit 250 # request estimate, no API calls
+    python -m data_pullv2.cli cache --clear
 
 Replaces ``app.py``, which executed its entire pipeline at import time, so
 merely importing it fired hundreds of API requests.
@@ -17,14 +19,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import os
 import sys
 from typing import List, Optional
-
-# Run as a script (``python cli.py``, ``python eod_update.py``) the working
-# directory is this package, not its parent, so the ``data_pullv2.*`` imports
-# the modules use would not resolve. Put the parent on the path first.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data_pullv2.core.logging_setup import configure
 from data_pullv2.settings import ConfigError, load_settings

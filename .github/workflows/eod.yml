@@ -1,0 +1,120 @@
+name: EOD update
+
+# Runs the daily incremental price update against a remote PostgreSQL
+# instance. This does NOT work against a localhost database -- migrate to
+# managed Postgres (Neon, Supabase, RDS, ...) first, then set the repository
+# variable EOD_ENABLED to "true" to switch the schedule on.
+#
+# Until EOD_ENABLED is set, scheduled runs are skipped rather than failing,
+# so you do not get a daily failure email while the migration is pending.
+# Manual runs via "Run workflow" always execute.
+#
+# --- Required repository secrets (Settings -> Secrets and variables -> Actions)
+#   FMP_API_KEY   your Financial Modeling Prep key
+#   DB_HOST       managed Postgres hostname
+#   DB_PORT       usually 5432
+#   DB_NAME       database name
+#   DB_USER       database user
+#   DB_PASSWORD   database password
+#
+# --- Optional repository variables
+#   EOD_ENABLED   "true" to enable the schedule
+#   MAX_SYMBOLS   universe cap (default 250)
+
+on:
+  schedule:
+    # 23:00 UTC on weekdays = 6:00 PM EST / 7:00 PM EDT, comfortably after the
+    # 4:00 PM ET close in both halves of the year, with no DST handling needed.
+    # At this hour the UTC date still matches the US trading date, which the
+    # job's own weekday check relies on.
+    - cron: "0 23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fetch and transform without writing to the database"
+        type: boolean
+        default: false
+      force:
+        description: "Run even if today is not a weekday"
+        type: boolean
+        default: false
+      limit:
+        description: "Cap the number of symbols (blank = MAX_SYMBOLS)"
+        type: string
+        default: ""
+
+# Never let a slow run overlap the next day's run.
+concurrency:
+  group: eod-update
+  cancel-in-progress: false
+
+jobs:
+  eod:
+    # Scheduled runs require the opt-in variable; manual runs always proceed.
+    if: github.event_name == 'workflow_dispatch' || vars.EOD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fail early if secrets are missing
+        env:
+          API_KEY: ${{ secrets.FMP_API_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+        run: |
+          missing=""
+          [ -z "$API_KEY" ] && missing="$missing FMP_API_KEY"
+          [ -z "$DB_HOST" ] && missing="$missing DB_HOST"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing"
+            exit 1
+          fi
+          case "$DB_HOST" in
+            localhost|127.0.0.1|::1)
+              echo "::error::DB_HOST is $DB_HOST -- a GitHub runner cannot reach your local database. Migrate to managed Postgres first."
+              exit 1
+              ;;
+          esac
+
+      - name: Run EOD update
+        # The repository root is the working directory, which is what puts the
+        # data_pullv2 package on sys.path. No install step is required.
+        env:
+          API_KEY: ${{ secrets.FMP_API_KEY }}
+          host: ${{ secrets.DB_HOST }}
+          port: ${{ secrets.DB_PORT }}
+          database: ${{ secrets.DB_NAME }}
+          user: ${{ secrets.DB_USER }}
+          password: ${{ secrets.DB_PASSWORD }}
+          sslmode: require
+          MAX_SYMBOLS: ${{ vars.MAX_SYMBOLS || '250' }}
+          LOG_LEVEL: INFO
+          # Runners start with an empty filesystem, so the reference-data cache
+          # is always cold. That costs ~9 extra requests out of ~250.
+          CACHE_ENABLED: "false"
+        run: |
+          args="eod"
+          [ "${{ inputs.dry_run }}" = "true" ] && args="$args --dry-run"
+          [ "${{ inputs.force }}" = "true" ] && args="$args --force"
+          [ -n "${{ inputs.limit }}" ] && args="$args --limit ${{ inputs.limit }}"
+          echo "running: python -m data_pullv2.cli $args"
+          python -m data_pullv2.cli $args | tee eod.log
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eod-log-${{ github.run_id }}
+          path: eod.log
+          retention-days: 14
+          if-no-files-found: ignore

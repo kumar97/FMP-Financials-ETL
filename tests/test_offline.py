@@ -13,10 +13,10 @@ import time
 
 import pandas as pd
 
-# The package is imported as ``data_pullv2.*``, so its *parent* is what has to
-# be importable -- two levels up from this file, not one.
-sys.path.insert(0, os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))))
+# The package is imported as ``data_pullv2.*``, so the repository root -- the
+# package's parent -- is what has to be importable. tests/ sits at the repo
+# root, so that is exactly two levels up from this file.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data_pullv2.core.ratelimit import AsyncRateLimiter
 from data_pullv2.storage.schema import TABLES

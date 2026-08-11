@@ -14,11 +14,23 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PACKAGE_ROOT = Path(__file__).resolve().parent
+# The repository root -- one level above the package. Runtime files (.env,
+# .cache) live here, beside pyproject.toml, not inside the package itself.
+PROJECT_ROOT = PACKAGE_ROOT.parent
 
-# Load .env relative to this file, not the working directory, so scheduled
-# tasks and ad-hoc scripts resolve the same configuration.
-load_dotenv(PROJECT_ROOT / ".env")
+# Resolve configuration relative to these paths rather than the working
+# directory, so a scheduled task started from anywhere finds the same .env.
+# An explicit ENV_FILE wins; otherwise prefer the repo root and fall back to
+# the package directory for installed/relocated layouts.
+_ENV_OVERRIDE = os.getenv("ENV_FILE")
+if _ENV_OVERRIDE:
+    ENV_PATH = Path(_ENV_OVERRIDE).expanduser()
+else:
+    _candidates = [PROJECT_ROOT / ".env", PACKAGE_ROOT / ".env", Path.cwd() / ".env"]
+    ENV_PATH = next((p for p in _candidates if p.is_file()), _candidates[0])
+
+load_dotenv(ENV_PATH)
 
 
 class ConfigError(RuntimeError):
@@ -30,7 +42,7 @@ def _require(name: str) -> str:
     if raw is None or not raw.strip():
         raise ConfigError(
             f"Required environment variable {name!r} is missing or empty. "
-            f"Add it to {PROJECT_ROOT / '.env'}"
+            f"Add it to {ENV_PATH}"
         )
     return raw.strip()
 
