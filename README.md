@@ -97,21 +97,6 @@ There is nothing to install or build — the workflow checks out the repo, pips
 `requirements.txt`, and runs `python -m data_pullv2.cli eod` from the
 repository root.
 
-**It cannot work against `host=localhost`.** A GitHub runner has no route to a
-database on your machine, so this requires migrating to managed Postgres
-(Neon, Supabase, RDS, …) first. The workflow fails fast with a clear message
-if `DB_HOST` is a loopback address, rather than hanging until timeout.
-
-To switch it on:
-
-1. Migrate the database (`pg_dump` → `pg_restore`).
-2. Add repository **secrets** — Settings → Secrets and variables → Actions:
-   `FMP_API_KEY`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`.
-3. Add the repository **variable** `EOD_ENABLED` = `true`.
-   Until you do, scheduled runs are skipped rather than failing, so you get no
-   daily failure email while the migration is pending.
-4. Optionally set the variable `MAX_SYMBOLS` (default 250).
-
 Trigger it manually any time via Actions → EOD update → Run workflow, which
 also accepts `dry_run`, `force` and `limit` inputs. Manual runs ignore
 `EOD_ENABLED`, so you can test before enabling the schedule.
@@ -128,9 +113,7 @@ and the next run backfills the gap from each symbol's watermark.
 ### Triggering externally from cron-job.org
 
 If you want punctual, minute-accurate scheduling, drive the workflow from
-[cron-job.org](https://cron-job.org) instead. It only issues HTTP requests —
-it cannot run Python — so it acts as the trigger while Actions stays the
-runtime.
+[cron-job.org](https://cron-job.org) instead. 
 
 **Leave `EOD_ENABLED` unset** in that setup. The built-in schedule then stays
 off and cron-job.org is the only trigger, so you don't get two runs a day.
