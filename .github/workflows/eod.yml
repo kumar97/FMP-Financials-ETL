@@ -9,6 +9,17 @@ name: EOD update
 # so you do not get a daily failure email while the migration is pending.
 # Manual runs via "Run workflow" always execute.
 #
+# --- Two ways to drive this ---
+#   a) GitHub's own cron below. Set EOD_ENABLED=true. Best-effort timing:
+#      runs can lag tens of minutes under load.
+#   b) An external scheduler (e.g. cron-job.org) POSTing to the workflow
+#      dispatch API for minute-accurate timing. In that case leave
+#      EOD_ENABLED unset so the built-in cron stays off and you do not get
+#      two runs a day. The workflow_dispatch trigger below is what it calls;
+#      see "Triggering externally" in README.md for the exact request.
+# Either way the job is idempotent on (symbol, date), so a duplicate or
+# late run is harmless.
+#
 # --- Required repository secrets (Settings -> Secrets and variables -> Actions)
 #   FMP_API_KEY   your Financial Modeling Prep key
 #   DB_HOST       managed Postgres hostname
